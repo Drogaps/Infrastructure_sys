@@ -1,0 +1,56 @@
+---
+- hosts: grafana
+  vars:
+    - "grafana": { "dashboards": [
+      {
+        "name": "t1",
+        "file": "dashboard.json",
+        "dash_name": "Instance_dashboard"
+      }
+    ]
+    }
+  tasks:
+    - name: Install https://dl.grafana.com/oss/release/grafana_8.3.3_amd64.deb
+      apt:
+       deb: https://dl.grafana.com/oss/release/grafana_8.3.3_amd64.deb
+
+    - name: Make sure a service is running
+      systemd:
+        state: started
+        name: grafana-server
+
+    - name: enable service tuned and ensure it is not masked
+      systemd:
+        name: grafana-server
+        enabled: yes
+        masked: no
+
+    - name: "wait for grafana to come up"
+      uri:
+        url: "http://{{ groups['grafana'][0] }}:3000/login"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 60
+      delay: 1
+
+
+    - name: Send dashboard to Grafana
+      uri:
+        url: http://10.0.10.11:3000/api/dashboards/db
+        method: POST
+        user: "admin"
+        password: "admin"
+        body: "{{ lookup('template', item.file) }}"
+        status_code: 200
+        body_format: json
+        force_basic_auth: yes
+        headers:
+          Accept: application/json
+          Content-Type: application/json
+      with_items: "{{ grafana.dashboards }}"
+      tags: dashboard
+      register: result
+
+  become: yes
+  become_method: sudo
