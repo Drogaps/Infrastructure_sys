@@ -1,0 +1,51 @@
+- name: Install Grafana
+  apt:
+   deb: https://dl.grafana.com/oss/release/grafana_8.3.3_amd64.deb
+
+- name: Make sure a service is running
+  systemd:
+    state: started
+    name: grafana-server
+
+- name: enable service tuned and ensure it is not masked
+  systemd:
+    name: grafana-server
+    enabled: yes
+    masked: no
+
+- name: "wait for grafana to come up"
+  uri:
+    url: "http://{{ groups['grafana'][0] }}:3000/login"
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 60
+  delay: 1
+
+- name: Configure Grafana
+  delegate_to: localhost
+  become: false
+  community.grafana.grafana_datasource:
+    name: prometheus
+    ds_type: prometheus
+    ds_url: "http://{{ groups['prometheus'][0]  }}:9090"
+    url: http://51.250.35.162:3000
+    access: proxy
+    tls_skip_verify: true
+    is_default: true
+
+- name: Import Grafana dashboard
+  delegate_to: localhost
+  become: false
+  community.grafana.grafana_dashboard:
+    grafana_url: http://51.250.35.162:3000
+    grafana_user: "admin"
+    grafana_password: "admin"
+    state: present
+    commit_message: Updated by ansible
+    overwrite: yes
+    path: "./roles/grafana/templates/dashboard.json"
+    folder: General
+
+- name: change admin password for grafana
+  shell : "grafana-cli admin reset-admin-password rocketboy5000"

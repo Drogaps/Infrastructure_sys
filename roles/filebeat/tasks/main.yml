@@ -1,0 +1,44 @@
+- name: Download filebeat
+  get_url:
+      url: https://storage.yandexcloud.net/drugov/ELK7/filebeat-7.17.8-amd64.deb?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=YCAJEAvqBdVwYwsmpSHOunfAn%2F20230122%2Fru-central1%2Fs3%2Faws4_request&X-Amz-Date=20230122T145147Z&X-Amz-Expires=2592000&X-Amz-Signature=DBA0D7B8317D8EFD3843684809E34072FBC9CF0BA5F7CE169C1EA24FD292E4E3&X-Amz-SignedHeaders=host
+      dest: /home/drogaps/
+
+- name: Install filebeat
+  apt:
+    update_cache: yes
+    deb: /home/drogaps/filebeat-7.17.8-amd64.deb
+
+- name: Apply filebeat template
+  template:
+   src: filebeat.j2
+   dest: /etc/filebeat/filebeat.yml
+
+- name:
+  lineinfile:
+   path: /etc/filebeat/filebeat.yml
+   regexp: '^\s*#username:'
+   line: '  username: "elastic"'
+
+- name:
+  lineinfile:
+   path: /etc/filebeat/filebeat.yml
+   regexp: '^\s*#password:'
+   line: '  password: "301076"'
+
+- name: Execute the command
+  shell: filebeat modules enable nginx
+
+- name: Apply filebeat_modul template
+  template:
+   src: nginx.j2
+   dest: /etc/filebeat/modules.d/nginx.yml
+
+- name: Execute the command
+  shell:  filebeat setup --pipelines --modules nginx
+
+- name: Execute the command
+  shell:  filebeat setup --index-management -E output.logstash.enabled=false -E 'output.elasticsearch.hosts=["elastic:9200"]'
+
+- name: Execute the command
+  shell:  filebeat setup -E output.logstash.enabled=false -E output.elasticsearch.hosts=['elastic:9200'] -E setup.kibana.host=kibana:5601
+  notify: start filebeat
